@@ -45,7 +45,7 @@ public class EhcacheProvider implements CacheProvider {
 	private static final String NAME = "Cache provider for ehcache";
 	private final Map<String, Object> extras = new HashMap<String, Object>();
 
-	protected net.sf.ehcache.CacheManager cacheManager;
+	protected static net.sf.ehcache.CacheManager CACHE_MANAGER;
 	
 	public EhcacheProvider(){
 		
@@ -122,23 +122,25 @@ public class EhcacheProvider implements CacheProvider {
 				return n;
 			}
 		}
-		
-		logger.warn("Schema {0} not matched cache, use default cache {1}.", schema, getCacheName());
+
+        if(logger.isDebug())
+		    logger.debug("Schema {0} not matched cache, use default cache {1}.", schema, getCacheName());
+
 		return getCacheName();
 	}
 	
 	private CacheManager getManager() {
-		if (null == cacheManager) {
+		if (null == CACHE_MANAGER) {
 			if (StringUtils.isBlank(getConfigFile())) {
-				cacheManager = new net.sf.ehcache.CacheManager(getClass()
+                CACHE_MANAGER = CacheManager.create(getClass()
 						.getClassLoader().getResource("ehcache.xml"));
 			} else {
-				cacheManager = new net.sf.ehcache.CacheManager(getClass()
+                CACHE_MANAGER = CacheManager.create(getClass()
 						.getClassLoader().getResource(getConfigFile()));
 			}
 		}
 
-		return cacheManager;
+		return CACHE_MANAGER;
 	}
 
 	public String getCacheName() {
