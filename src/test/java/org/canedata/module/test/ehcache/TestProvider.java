@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.util.logging.LogManager;
 
 import org.canedata.cache.Cache;
-import org.canedata.core.util.StringCacheableWrapped;
+import org.canedata.core.cache.StringCacheableWrapped;
 import org.canedata.module.ehcache.EhcacheProvider;
 import org.junit.BeforeClass;
 import org.junit.Test;
