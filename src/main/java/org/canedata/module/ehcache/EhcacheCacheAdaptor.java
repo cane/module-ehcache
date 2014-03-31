@@ -45,14 +45,14 @@ public class EhcacheCacheAdaptor implements Cache {
 		wrapped.put(new Element(target.getKey(), target.onCaching()));
 	}
 
-	public Object restore(Object key) {
+	public <T> T restore(Object key) {
 		Element e = wrapped.get(key);
 
 		if(null == e) return null;
 		
 		Cacheable t = (Cacheable)e.getObjectValue();
 		
-		return t.onRestored();
+		return (T)t.onRestored();
 	}
 
 	
