@@ -15,17 +15,24 @@
  */
 package org.canedata.module.ehcache;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-
-import net.sf.ehcache.CacheManager;
-
 import org.canedata.cache.Cache;
 import org.canedata.cache.CacheProvider;
+import org.canedata.cache.Cacheable;
 import org.canedata.core.logging.LoggerFactory;
 import org.canedata.core.util.StringUtils;
 import org.canedata.logging.Logger;
+import org.ehcache.CacheManager;
+import org.ehcache.config.Configuration;
+import org.ehcache.config.builders.CacheManagerBuilder;
+import org.ehcache.event.EventType;
+import org.ehcache.xml.XmlConfiguration;
+
+import java.net.URL;
+import java.text.MessageFormat;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Allow Cache Name using regular expressions.
@@ -36,30 +43,29 @@ import org.canedata.logging.Logger;
 public class EhcacheProvider implements CacheProvider {
 	private static final Logger logger = LoggerFactory
 			.getLogger(EhcacheProvider.class);
-	private final Map<String, Cache> caches = Collections
-			.synchronizedMap(new HashMap<String, Cache>(1));
+	private final ConcurrentMap<String, Cache> caches = new ConcurrentHashMap<String, Cache>(1);
 
 	protected String configFile = null;
-	private String cacheName = "default";
+	private String defaultCacheName = "default";
 	private static final String VENDOR = "Cane team";
 	private static final String NAME = "Cache provider for ehcache";
 	private final Map<String, Object> extras = new HashMap<String, Object>();
 
-	protected static net.sf.ehcache.CacheManager CACHE_MANAGER;
+	protected org.ehcache.CacheManager cacheManager;
 	
 	public EhcacheProvider(){
 		
 	}
 	
 	public EhcacheProvider(String cacheName){
-		setCacheName(cacheName);
+		setDefaultCacheName(cacheName);
 	}
-	
-	public EhcacheProvider(String cacheName, String config){
-		setCacheName(cacheName);
+
+	public EhcacheProvider(String defaultCacheName, String config){
+		setDefaultCacheName(defaultCacheName);
 		setConfigFile(config);
 	}
-	
+
 	public String getName() {
 		return NAME;
 	}
@@ -80,75 +86,104 @@ public class EhcacheProvider implements CacheProvider {
 		return extras.get(key);
 	}
 
+	@Override
+	public EhcacheProvider setExtra(String key, Object val) {
+		extras.put(key, val);
+
+		return this;
+	}
+
 	public Cache getCache(String schema) {
 		return getCache(schema, null);
 	}
 
+	private java.util.concurrent.locks.ReentrantLock lock = new ReentrantLock();
 	public Cache getCache(String schema, Map<String, Object> strategies) {
-        if(logger.isDebug())
-            logger.debug(
-				"Get cache from EhCacheManager, schema {0} ignored use {1}.",
-				schema, getCacheName());
-
 		//schema entity.factory.name:entity.schema:entity.name
 		if (strategies != null && !strategies.isEmpty())
 			extras.putAll(strategies);
 
-		Cache cache = caches.get(schema);
+		String _schema = matchCacheName(schema);
+		//MongoEntityFactory.this.getName().concat(":")
+		//							.concat(getSchema()).concat(":").concat(getName())
+
+		if(logger.isDebug())
+			logger.debug(
+					"Getting cache from EhCacheManager, expected cache is {0}, matched to {1}  ...",
+					schema, _schema);
+
+		lock.lock();
+		Cache cache = caches.get(_schema);
 		if (null == cache) {
-			net.sf.ehcache.Cache ehcache = getManager().getCache(matchCacheName(schema));
+			org.ehcache.Cache ehcache = getManager().getCache(_schema, String.class, Object.class);
 
 			if (null == ehcache)
 				throw new RuntimeException("Don't get Ehcache from "
-						+ getConfigFile() + " by " + getCacheName() + ".");
+						+ getConfigFile() + " by " + getDefaultCacheName() + ".");
 
 			cache = new EhcacheCacheAdaptor(ehcache);
 			
-			caches.put(schema, cache);
+			caches.put(_schema, cache);
 		}
+		lock.unlock();
 
 		return cache;
 	}
 
+	private Set<String> cacheNames = null;
 	private String matchCacheName(String schema){
-		if(StringUtils.isBlank(schema)) return getCacheName();
-		
-		String[] ns = getManager().getCacheNames();
-		for(String n:ns){
-			if(schema.matches(n)){
-                if(logger.isDebug())
-				    logger.debug("Schema {0} matched cache named {1}.", schema, n);
-				
-				return n;
-			}
+		if(StringUtils.isBlank(schema)) return getDefaultCacheName();
+		if (cacheNames == null)
+			cacheNames = getManager().getRuntimeConfiguration().getCacheConfigurations().keySet();
+
+		if(cacheNames.contains(schema)) {
+			Optional<String> n = cacheNames.stream().filter(i -> {
+				return schema.equals(i);
+			}).findFirst();
+			if(n.isPresent())
+				return n.get();
 		}
 
-        if(logger.isDebug())
-		    logger.debug("Schema {0} not matched cache, use default cache {1}.", schema, getCacheName());
 
-		return getCacheName();
+        if(logger.isDebug())
+		    logger.debug("Schema {0} not matched cache, use default cache {1}.", schema, getDefaultCacheName());
+
+		return getDefaultCacheName();
 	}
 	
 	private CacheManager getManager() {
-		if (null == CACHE_MANAGER) {
+		if (null == cacheManager) {
+			URL myUrl = null;
 			if (StringUtils.isBlank(getConfigFile())) {
-                CACHE_MANAGER = CacheManager.create(getClass()
-						.getClassLoader().getResource("ehcache.xml"));
+				myUrl = getClass().getClassLoader().getResource("ehcache.xml");
+
 			} else {
-                CACHE_MANAGER = CacheManager.create(getClass()
-						.getClassLoader().getResource(getConfigFile()));
+				myUrl = getClass()
+						.getClassLoader().getResource(getConfigFile());
 			}
+
+			Configuration xmlConfig = new XmlConfiguration(myUrl);
+			cacheManager = CacheManagerBuilder.newCacheManager(xmlConfig);
+			cacheManager.init();
 		}
 
-		return CACHE_MANAGER;
+		return cacheManager;
 	}
 
-	public String getCacheName() {
-		return cacheName;
+    public CacheManager getCacheManager() {
+        return cacheManager;
+    }
+
+    public void setCacheManager(CacheManager cacheManager) {
+        this.cacheManager = cacheManager;
+    }
+
+    public String getDefaultCacheName() {
+		return defaultCacheName;
 	}
 
-	public void setCacheName(String cacheName) {
-		this.cacheName = cacheName;
+	public void setDefaultCacheName(String name) {
+		this.defaultCacheName = name;
 	}
 
 	public String getConfigFile() {
@@ -158,5 +193,4 @@ public class EhcacheProvider implements CacheProvider {
 	public void setConfigFile(String configFile) {
 		this.configFile = configFile;
 	}
-
 }

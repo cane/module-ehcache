@@ -15,8 +15,6 @@
  */
 package org.canedata.module.ehcache;
 
-import net.sf.ehcache.Element;
-
 import org.canedata.cache.Cache;
 import org.canedata.cache.Cacheable;
 import org.canedata.core.logging.LoggerFactory;
@@ -29,28 +27,34 @@ import org.canedata.logging.Logger;
  */
 public class EhcacheCacheAdaptor implements Cache {
 	protected Logger logger = LoggerFactory.getLogger(EhcacheCacheAdaptor.class);
-	protected net.sf.ehcache.Cache wrapped = null;
+	protected org.ehcache.Cache wrapped = null;
 	
-	public EhcacheCacheAdaptor(net.sf.ehcache.Cache wrap){
+	public EhcacheCacheAdaptor(org.ehcache.Cache wrap){
 		if(null == wrap)
 			throw new RuntimeException("Don't get cache instance of Ehcache.");
 
         if(logger.isDebug())
 		    logger.debug("Create Cache instance {0}.", wrap.hashCode());
-		
+
 		wrapped = wrap;
 	}
 	
 	public void cache(Cacheable target) {
-		wrapped.put(new Element(target.getKey(), target.onCaching()));
+        if(logger.isDebug())
+            logger.debug("Caching object to cache for {0} ...", String.valueOf(target.getKey()));
+
+		wrapped.put(target.getKey(), target.onCaching());
 	}
 
 	public <T> T restore(Object key) {
-		Element e = wrapped.get(key);
+        if(logger.isDebug())
+            logger.debug("Restore object from cache for {0} ...", String.valueOf(key));
+
+		Object e = wrapped.get(key);
 
 		if(null == e) return null;
 		
-		Cacheable t = (Cacheable)e.getObjectValue();
+		Cacheable t = (Cacheable)e;
 		
 		return (T)t.onRestored();
 	}
@@ -60,18 +64,29 @@ public class EhcacheCacheAdaptor implements Cache {
 		wrapped.remove(key);
 	}
 
+    public void removeAll(){
+		wrapped.clear();
+    }
+
 	public boolean isAlive(Object key) {
         if(logger.isDebug())
-            logger.debug("#isAlive, key is {0}, keyInCache is {1}.", key, wrapped.isKeyInCache(key));
+            logger.debug("#isAlive, key is {0}, keyInCache is {1}.", key, wrapped.containsKey(key));
 		
-		if(!wrapped.isKeyInCache(key))
+		if(!wrapped.containsKey(key))
 			return false;
 		
-		Element o = wrapped.get(key);
+		Object o = wrapped.get(key);
 		if(null == o)
 			return false;
-		
-		return !o.isExpired();
+
+		return true;
 	}
 
+    public boolean isWrappedFor(Class<?> iface) {
+        return iface.isInstance(this);
+    }
+
+    public <T> T unwrap(Class<T> iface) {
+        return iface.cast(wrapped);
+    }
 }
