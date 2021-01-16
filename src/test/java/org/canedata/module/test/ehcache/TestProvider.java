@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.logging.LogManager;
 
 import org.canedata.cache.Cache;
@@ -48,28 +49,31 @@ public class TestProvider {
 			e.printStackTrace();
 		}
 		
-		provider.setCacheName("sampleCache");
+		provider.setDefaultCacheName("sampleCache");
 	}
 	
 	@Test
 	public void p(){
-		Cache cache = provider.getCache("default");
+		Cache cache = provider.getCache("sampleCache");
 		assertNotNull(cache);
-		
+
+		//org.ehcache.Cache<String, String> c = cache.unwrap(org.ehcache.Cache.class);
+		//c.put("a", "a");
+		//assertEquals("a", c.get("a"));
+
 		cache.cache(new StringCacheableWrapped("1", false, "1"));
-		
+
 		StringCacheableWrapped c = (StringCacheableWrapped)cache.restore("1");
 		assertEquals(c.getContent(), "1");
-		
+
 		try {
-			Thread.sleep(9999);
+			Thread.sleep(1001);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		
+
 		assertTrue(!cache.isAlive("1"));
-		
-		
+
 	}
 	
 	@Test
