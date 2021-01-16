@@ -27,6 +27,7 @@ import org.ehcache.config.builders.CacheManagerBuilder;
 import org.ehcache.event.EventType;
 import org.ehcache.xml.XmlConfiguration;
 
+import java.io.Serializable;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.*;
@@ -115,7 +116,7 @@ public class EhcacheProvider implements CacheProvider {
 		lock.lock();
 		Cache cache = caches.get(_schema);
 		if (null == cache) {
-			org.ehcache.Cache ehcache = getManager().getCache(_schema, String.class, Object.class);
+			org.ehcache.Cache ehcache = getManager().getCache(_schema, String.class, Serializable.class);
 
 			if (null == ehcache)
 				throw new RuntimeException("Don't get Ehcache from "
