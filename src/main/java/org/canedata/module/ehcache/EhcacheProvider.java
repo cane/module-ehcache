@@ -116,7 +116,7 @@ public class EhcacheProvider implements CacheProvider {
 		lock.lock();
 		Cache cache = caches.get(_schema);
 		if (null == cache) {
-			org.ehcache.Cache ehcache = getManager().getCache(_schema, String.class, Serializable.class);
+			org.ehcache.Cache ehcache = getManager().getCache(_schema, String.class, Cacheable.class);
 
 			if (null == ehcache)
 				throw new RuntimeException("Don't get Ehcache from "

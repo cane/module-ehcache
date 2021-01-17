@@ -49,22 +49,23 @@ public class TestProvider {
 			e.printStackTrace();
 		}
 		
-		provider.setDefaultCacheName("sampleCache");
+		provider.setDefaultCacheName("default");
 	}
 	
 	@Test
 	public void p(){
-		Cache cache = provider.getCache("sampleCache");
+		Cache cache = provider.getCache("sample");
 		assertNotNull(cache);
 
 		//org.ehcache.Cache<String, String> c = cache.unwrap(org.ehcache.Cache.class);
 		//c.put("a", "a");
 		//assertEquals("a", c.get("a"));
 
-		cache.cache(new StringCacheableWrapped("1", false, "1"));
+		cache.cache(new StringCacheableWrapped("1", false, "a"));
 
 		StringCacheableWrapped c = (StringCacheableWrapped)cache.restore("1");
-		assertEquals(c.getContent(), "1");
+
+		assertEquals(c.getContent(), "a");
 
 		try {
 			Thread.sleep(1001);
